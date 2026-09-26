@@ -559,13 +559,6 @@
       transform: translate3d(0, 0, 0);
       clip-path: inset(0);
     }
-    /* Animacion de scroll desactivada: contenido siempre visible, sin letras flotantes */
-    .js.motion-ready .reveal:not(.reel-card) {
-      opacity: 1 !important;
-      transform: none !important;
-      clip-path: none !important;
-      transition: none !important;
-    }
 
     /* Three-dimensional, swipeable Instagram gallery */
     .reel-gallery { position: relative; margin-top: 8px; }
@@ -1121,9 +1114,18 @@
         button.addEventListener('click', function () { setLanguage(button.getAttribute('data-lang')); });
       });
 
-      /* Preserve the floating reveal, but never let an in-app browser leave
-         sections transparent if its IntersectionObserver stalls. */
+      /* Floating reveal on scroll: sections float in as they enter the viewport.
+         The safety pass only reveals what is already on screen, so content
+         below the fold keeps its floating animation instead of turning static. */
       var revealItems = document.querySelectorAll('.reveal:not(.reel-card)');
+      function revealInView() {
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        revealItems.forEach(function (el) {
+          if (el.classList.contains('visible')) return;
+          var rect = el.getBoundingClientRect();
+          if (rect.top < vh && rect.bottom > 0) el.classList.add('visible');
+        });
+      }
       if ('IntersectionObserver' in window && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.documentElement.classList.add('motion-ready');
         var revealObserver = new IntersectionObserver(function (entries) {
@@ -1135,9 +1137,16 @@
           });
         }, { threshold: 0.04, rootMargin: '0px 0px 12% 0px' });
         revealItems.forEach(function (el) { revealObserver.observe(el); });
-        window.setTimeout(function () {
-          revealItems.forEach(function (el) { el.classList.add('visible'); });
-        }, 1300);
+        var revealQueued = false;
+        function queueRevealInView() {
+          if (revealQueued) return;
+          revealQueued = true;
+          window.requestAnimationFrame(function () { revealQueued = false; revealInView(); });
+        }
+        window.addEventListener('scroll', queueRevealInView, { passive: true });
+        window.addEventListener('resize', queueRevealInView);
+        window.setTimeout(revealInView, 1300);
+        revealInView();
       } else {
         revealItems.forEach(function (el) { el.classList.add('visible'); });
       }
